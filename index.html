@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BoJ Tone Tracker</title>
+<meta name="description" content="Hawkish or dovish? A language model reads Bank of Japan monetary policy statements, in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f7f6f3; --panel:#ffffff; --ink:#16181b; --mute:#6c6f73; --line:#e3e1dc; --soft:#efede8;
+  --hawk:#b23a2e; --dove:#2f4a6d; --neutral:#9a9690; --nk:#a08a5c;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1012; --panel:#16181b; --ink:#ecebe8; --mute:#8d9095; --line:#2a2c30; --soft:#1d1f23;
+    --hawk:#d8604f; --dove:#7c9cc6; --neutral:#6f6c67; --nk:#c2a970;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1012; --panel:#16181b; --ink:#ecebe8; --mute:#8d9095; --line:#2a2c30; --soft:#1d1f23;
+  --hawk:#d8604f; --dove:#7c9cc6; --neutral:#6f6c67; --nk:#c2a970;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:980px;margin:0 auto;padding:40px 16px 64px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;border-bottom:1px solid var(--line);padding-bottom:20px}
+h1{font-size:22px;font-weight:600;letter-spacing:-.01em;margin:0}
+.kicker{font:500 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin-bottom:10px}
+.sub{color:var(--mute);margin:6px 0 0;font-size:14px}
+nav{position:relative;display:flex;gap:2px;background:var(--soft);padding:3px;border-radius:9px}
+nav button{all:unset;position:relative;z-index:1;cursor:pointer;font:500 13px Inter;color:var(--mute);padding:7px 13px;border-radius:7px;transition:color .2s}
+nav button[aria-selected="true"]{color:var(--ink)}
+nav .pill{position:absolute;top:3px;bottom:3px;border-radius:7px;background:var(--panel);box-shadow:0 0 0 1px var(--line),0 1px 2px rgba(0,0,0,.05);transition:left .25s cubic-bezier(.3,.7,.2,1),width .25s cubic-bezier(.3,.7,.2,1)}
+section{display:none;padding-top:24px}
+section.on{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px}
+.kpi{background:var(--panel);padding:14px 16px}
+.kpi b{display:block;font:600 20px/1.2 Inter;letter-spacing:-.01em}
+.kpi span{font:11px var(--mono);color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.seg{display:flex;gap:2px;background:var(--soft);padding:3px;border-radius:8px}
+.seg button{all:unset;cursor:pointer;font:500 12px var(--mono);color:var(--mute);padding:5px 10px;border-radius:6px;transition:background .15s,color .15s}
+.seg button[aria-pressed="true"]{background:var(--panel);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.hint{font:11.5px var(--mono);color:var(--mute)}
+textarea{width:100%;min-height:110px;resize:vertical;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:15px/1.5 Inter;padding:12px;transition:border-color .15s}
+textarea:focus{outline:none;border-color:var(--ink)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.btn{all:unset;cursor:pointer;background:var(--ink);color:var(--bg);font:500 14px Inter;padding:10px 16px;border-radius:7px;transition:opacity .15s,transform .1s}
+.btn:active{transform:scale(.98)}
+.btn[disabled]{opacity:.45;cursor:default}
+.btn.ghost{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.chip{all:unset;cursor:pointer;font-size:12.5px;color:var(--mute);border:1px solid var(--line);border-radius:999px;padding:5px 10px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .15s,border-color .15s}
+.chip:hover{color:var(--ink);border-color:var(--mute)}
+.chip.live::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--neutral);margin-right:7px;vertical-align:1px}
+.status{font:12px var(--mono);color:var(--mute);min-height:18px}
+.bar{height:3px;background:var(--soft);border-radius:2px;overflow:hidden;margin-top:10px;opacity:0;transition:opacity .2s}
+.bar.on{opacity:1}
+.bar i{display:block;height:100%;width:0;background:var(--ink);transition:width .2s linear}
+.verdict{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:center;margin-top:22px}
+.verdict .lab{font-size:28px;font-weight:600;letter-spacing:-.02em}
+.scale{position:relative;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--dove),var(--line) 50%,var(--hawk))}
+.scale i{position:absolute;top:-5px;width:2px;height:16px;background:var(--ink);transform:translateX(-1px);transition:left .5s cubic-bezier(.3,.7,.2,1)}
+.scale-lab{display:flex;justify-content:space-between;font:11px var(--mono);color:var(--mute);margin-top:6px}
+.sents{margin-top:22px;border-top:1px solid var(--line)}
+.sent{display:grid;grid-template-columns:86px 1fr 120px;gap:14px;padding:12px 0;border-bottom:1px solid var(--line);font-size:14px;animation:fade .25s ease both}
+.tag{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;padding-top:2px}
+.tag.hawkish{color:var(--hawk)} .tag.dovish{color:var(--dove)} .tag.neutral{color:var(--neutral)}
+.probs{font:11.5px/1.5 var(--mono);color:var(--mute);text-align:right}
+.chartbox{position:relative;touch-action:pan-y}
+svg{display:block;width:100%;height:auto}
+.axis text{font:10.5px var(--mono);fill:var(--mute)}
+.grid line{stroke:var(--line)}
+.ev text{font:10px var(--mono);fill:var(--mute)}
+.ev line{stroke:var(--mute);stroke-dasharray:2 3;stroke-opacity:.6}
+#cross{stroke:var(--ink);stroke-opacity:.35;pointer-events:none;transition:opacity .12s}
+.bars rect{transition:opacity .12s}
+.draw{stroke-dasharray:var(--len);stroke-dashoffset:var(--len);animation:draw 1.1s cubic-bezier(.4,.1,.2,1) forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:12.5px;max-width:280px;box-shadow:0 6px 24px rgba(0,0,0,.08);opacity:0;transition:opacity .12s,transform .12s;transform:translateY(2px)}
+.tip.on{opacity:1;transform:none}
+.tip b{font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:18px;font-size:12.5px;color:var(--mute);margin-top:14px}
+.legend span::before{content:"";display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:7px;background:currentColor}
+.note{color:var(--mute);font-size:13px;margin-top:14px;max-width:720px}
+footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--mute);display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between}
+a{color:inherit}
+@media (max-width:640px){
+  header{flex-direction:column;align-items:flex-start}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .sent{grid-template-columns:70px 1fr}
+  .probs{grid-column:2;text-align:left}
+  .verdict{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.draw{stroke-dashoffset:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="kicker">Bank of Japan · NLP</div>
+      <h1>BoJ Tone Tracker</h1>
+      <p class="sub">Hawkish or dovish? A language model reads monetary policy statements, entirely in your browser.</p>
+    </div>
+    <nav role="tablist"><span class="pill"></span>
+      <button role="tab" aria-selected="true" data-tab="time">Tone over time</button>
+      <button role="tab" aria-selected="false" data-tab="read">Read a sentence</button>
+    </nav>
+  </header>
+
+  <section id="time" class="on">
+    <div class="kpis" id="kpis"></div>
+    <div class="panel">
+      <div class="toolbar">
+        <div class="seg" id="range">
+          <button data-r="2013,2027" aria-pressed="true">All</button>
+          <button data-r="2013,2020">2013–19</button>
+          <button data-r="2020,2024">2020–23</button>
+          <button data-r="2024,2027">2024–</button>
+        </div>
+        <span class="hint">Hover a meeting, click to open the statement</span>
+      </div>
+      <div class="chartbox" id="cb"><svg id="chart" viewBox="0 0 940 420" role="img" aria-label="Tone index of Bank of Japan statements against the Nikkei 225"></svg><div class="tip" id="tip"></div></div>
+      <div class="legend">
+        <span style="color:var(--ink)">Tone, 4-meeting average</span>
+        <span style="color:var(--hawk)">Hawkish meeting</span>
+        <span style="color:var(--dove)">Dovish meeting</span>
+        <span style="color:var(--nk)">Nikkei 225, month end (right axis)</span>
+      </div>
+      <p class="note">Each Statement on Monetary Policy since 2013, split into sentences and scored. Tone = (hawkish − dovish) / sentences. Since 2024 statements are very short, so single meetings swing more.</p>
+    </div>
+  </section>
+
+  <section id="read">
+    <div class="panel">
+      <textarea id="txt" placeholder="Paste one or several sentences from a BoJ statement, in English"></textarea>
+      <div class="row">
+        <button class="btn" id="go">Read the tone</button>
+        <span class="status" id="st">The examples answer instantly. Your own text needs the model (about 500 MB, downloaded once, then kept on this device).</span>
+      </div>
+      <div class="bar" id="bar"><i></i></div>
+      <div class="row" id="ex"></div>
+      <div id="out"></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Model <a href="https://huggingface.co/mrince/CBRT-RoBERTa-HawkishDovish-Classifier">mrince/CBRT-RoBERTa-HawkishDovish-Classifier</a> · data © Bank of Japan · method and limits in the <a href="https://huggingface.co/spaces/Kukai-7/boj-tone-tracker/blob/main/README.md">README</a></span>
+    <span><a href="https://github.com/Kukai-7/nikkei-225-drivers">Econometrics on the Nikkei</a> · <a href="https://github.com/Kukai-7">GitHub</a></span>
+  </footer>
+</div>
+
+<script type="module">
+const MODEL_REPO = "mrince/CBRT-RoBERTa-HawkishDovish-Classifier";
+const WEIGHTS = `https://huggingface.co/${MODEL_REPO}/resolve/main/model.safetensors`;
+const LABELS = ["neutral", "hawkish", "dovish"];   // per the model card: 0 neutral, 1 hawkish, 2 dovish
+const $ = s => document.querySelector(s);
+
+// ---------- tabs with a sliding pill
+const tabs = [...document.querySelectorAll("nav button")], pill = $("nav .pill");
+function movePill(b) { pill.style.left = b.offsetLeft + "px"; pill.style.width = b.offsetWidth + "px"; }
+function show(name) {
+  tabs.forEach(x => x.setAttribute("aria-selected", x.dataset.tab === name));
+  document.querySelectorAll("section").forEach(s => s.classList.toggle("on", s.id === name));
+  movePill(tabs.find(x => x.dataset.tab === name));
+  if (name === "time") drawChart(false);
+  try { history.replaceState(null, "", "#" + name); } catch (e) {}
+}
+tabs.forEach(b => b.onclick = () => show(b.dataset.tab));
+addEventListener("resize", () => movePill(tabs.find(x => x.getAttribute("aria-selected") === "true")));
+
+// ---------- model: weights cached on the device, WebGPU when available, batched inference
+let ready = null;
+function progress(p) { const b = $("#bar"); b.classList.toggle("on", p !== null); b.firstElementChild.style.width = ((p || 0) * 100).toFixed(1) + "%"; }
+async function getWeights(onStatus) {
+  let cache = null;
+  try { cache = await caches.open("boj-tone-weights-v1"); const hit = await cache.match(WEIGHTS); if (hit) { onStatus("Loading weights from this device"); return new Uint8Array(await hit.arrayBuffer()); } } catch (e) { cache = null; }
+  const res = await fetch(WEIGHTS);
+  const total = +res.headers.get("content-length") || 0;
+  const reader = res.body.getReader(), chunks = []; let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read(); if (done) break;
+    chunks.push(value); got += value.length;
+    if (total) { progress(got / total); onStatus(`Downloading the model, ${Math.round(got / 1e6)} of ${Math.round(total / 1e6)} MB (first time only)`); }
+  }
+  const buf = new Uint8Array(got); let o = 0; for (const c of chunks) { buf.set(c, o); o += c.length; }
+  if (cache) { try { await cache.put(WEIGHTS, new Response(buf, { headers: { "content-type": "application/octet-stream" } })); } catch (e) {} }
+  return buf;
+}
+async function loadModel(onStatus) {
+  if (ready) return ready;
+  ready = (async () => {
+    onStatus("Loading runtime");
+    const gpu = !!navigator.gpu;
+    const ort = await import(`https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/${gpu ? "ort.webgpu.min.mjs" : "ort.min.mjs"}`);
+    ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
+    const [{ AutoTokenizer }, graph, weights] = await Promise.all([
+      import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3"),
+      fetch("model.onnx").then(r => r.arrayBuffer()).then(b => new Uint8Array(b)),
+      getWeights(onStatus),
+    ]);
+    const tok = await AutoTokenizer.from_pretrained(MODEL_REPO);
+    onStatus("Preparing the model");
+    let sess = null, backend = "wasm";
+    if (gpu) { try { sess = await ort.InferenceSession.create(graph, { executionProviders: ["webgpu"], externalData: [{ path: "model.safetensors", data: weights }] }); backend = "webgpu"; } catch (e) { sess = null; } }
+    if (!sess) sess = await ort.InferenceSession.create(graph, { executionProviders: ["wasm"], externalData: [{ path: "model.safetensors", data: weights }] });
+    progress(null);
+    return { ort, tok, sess, backend };
+  })();
+  ready.catch(() => { ready = null; progress(null); });
+  return ready;
+}
+async function classify(sentences) {
+  const { ort, tok, sess } = await ready;
+  const out = [];
+  for (let i = 0; i < sentences.length; i += 8) {
+    const batch = sentences.slice(i, i + 8);
+    const enc = await tok(batch, { padding: true, truncation: true, max_length: 256 });
+    const feeds = {
+      input_ids: new ort.Tensor("int64", enc.input_ids.data, enc.input_ids.dims),
+      attention_mask: new ort.Tensor("int64", enc.attention_mask.data, enc.attention_mask.dims),
+    };
+    const l = (await sess.run(feeds)).logits.data;
+    for (let b = 0; b < batch.length; b++) {
+      const r = Array.from(l.slice(b * 3, b * 3 + 3), Number), m = Math.max(...r), e = r.map(v => Math.exp(v - m)), z = e.reduce((a, c) => a + c, 0);
+      out.push(e.map(v => v / z));
+    }
+  }
+  return out;
+}
+function splitSentences(t) {
+  t = (t || "").replace(/\s+/g, " ").trim();
+  const parts = t.split(/(?<=[a-z0-9\)%"][.;!?])\s+(?=[A-Z(])/).filter(s => s.split(" ").length >= 4);
+  return parts.length ? parts : (t ? [t] : []);
+}
+
+// ---------- read tab
+// The examples were scored once with this exact model and page, so they answer without any download.
+const EXAMPLES = [
+  ["The Bank will continue with Quantitative and Qualitative Monetary Easing with Yield Curve Control, as long as it is necessary for maintaining the price stability target of 2 percent in a stable manner.", [0, 0, 1]],
+  ["The Bank decided to raise the guideline for the uncollateralized overnight call rate.", [0, 1, 0]],
+  ["It will not hesitate to take additional easing measures if necessary.", [0, 0, 1]],
+  ["If the outlook will be realized, the Bank will accordingly continue to raise the policy interest rate.", [0, 1, 0]],
+];
+EXAMPLES.forEach(([x, p]) => {
+  const c = document.createElement("button"); c.className = "chip"; c.textContent = x; c.title = x;
+  c.onclick = () => { $("#txt").value = x; p ? render([x], [p], true) : run(); }; $("#ex").appendChild(c);
+});
+function render(sents, P, cached) {
+  const score = P.reduce((a, p) => a + p[1] - p[2], 0) / P.length;
+  const lean = score > 0.15 ? "Hawkish" : score < -0.15 ? "Dovish" : "Balanced";
+  $("#out").innerHTML = `
+    <div class="verdict">
+      <div class="lab" style="color:${lean === "Hawkish" ? "var(--hawk)" : lean === "Dovish" ? "var(--dove)" : "var(--ink)"}">${lean}</div>
+      <div><div class="scale"><i style="left:50%"></i></div>
+      <div class="scale-lab"><span>dovish −1</span><span>score ${score >= 0 ? "+" : ""}${score.toFixed(2)}</span><span>+1 hawkish</span></div></div>
+    </div>
+    <div class="sents">${sents.map((s, i) => {
+      const p = P[i], k = p.indexOf(Math.max(...p));
+      return `<div class="sent" style="animation-delay:${Math.min(i, 12) * 30}ms"><span class="tag ${LABELS[k]}">${LABELS[k]}</span><span>${s.replace(/</g, "&lt;")}</span>
+        <span class="probs">H ${p[1].toFixed(2)} · D ${p[2].toFixed(2)}<br>N ${p[0].toFixed(2)}</span></div>`;
+    }).join("")}</div>`;
+  requestAnimationFrame(() => requestAnimationFrame(() => { const i = $("#out .scale i"); if (i) i.style.left = (score + 1) * 50 + "%"; }));
+  $("#st").textContent = cached ? "Example, scored in advance. A reading of the wording, not a forecast of policy." : "A reading of the wording, not a forecast of policy.";
+}
+async function run() {
+  const sents = splitSentences($("#txt").value);
+  if (!sents.length) { $("#st").textContent = "Paste a sentence first."; return; }
+  const ex = EXAMPLES.find(([x, p]) => p && x === sents.join(" "));
+  if (ex) return render([ex[0]], [ex[1]], true);
+  $("#go").disabled = true;
+  try {
+    const t0 = performance.now();
+    const { backend } = await loadModel(m => $("#st").textContent = m + "…");
+    $("#st").textContent = `Reading ${sents.length} sentence${sents.length > 1 ? "s" : ""}…`;
+    const P = await classify(sents);
+    render(sents, P, false);
+    $("#st").textContent += ` ${((performance.now() - t0) / 1000).toFixed(1)} s on ${backend === "webgpu" ? "the GPU" : "the CPU"}.`;
+  } catch (e) {
+    console.error(e);
+    $("#st").textContent = "Could not load the model in this browser. Try a recent desktop Chrome, Edge or Firefox.";
+  } finally { $("#go").disabled = false; }
+}
+$("#go").onclick = run;
+$("#txt").addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) run(); });
+
+// ---------- timeline tab
+const EVENTS = [["2013-04-04", "QQE"], ["2016-01-29", "Negative rate"], ["2016-09-21", "Yield curve control"], ["2020-03-16", "Covid easing"], ["2024-03-19", "Exit from negative rates"]];
+let DATA = null, RANGE = [2013, 2027], first = true;
+const dataP = fetch("data/timeline.json").then(r => r.json()).then(d => (DATA = d));
+function kpis() {
+  const M = DATA.meetings, n = M.reduce((a, d) => a + d.n, 0), h = M.reduce((a, d) => a + d.hawkish, 0), dv = M.reduce((a, d) => a + d.dovish, 0), last = M[M.length - 1];
+  const f = v => (v >= 0 ? "+" : "") + v.toFixed(2);
+  $("#kpis").innerHTML = [[M.length, "meetings"], [n.toLocaleString("en"), "sentences scored"], [`${Math.round(dv / n * 100)}% / ${Math.round(h / n * 100)}%`, "dovish / hawkish"], [f(last.smooth), "tone, latest 4 meetings"]]
+    .map(([b, s]) => `<div class="kpi"><b>${b}</b><span>${s}</span></div>`).join("");
+}
+async function drawChart(animate) {
+  if (!DATA) await dataP;
+  const all = DATA.meetings, nkAll = DATA.nikkei;
+  const t0 = new Date(RANGE[0] + "-01-01").getTime(), t1 = new Date(Math.min(RANGE[1], 2027) + "-01-01").getTime() - 864e5 * (RANGE[1] >= 2027 ? 90 : 0);
+  const meetings = all.filter(d => { const t = new Date(d.date).getTime(); return t >= t0 && t <= t1; });
+  const nikkei = nkAll.filter(n => { const t = new Date(n[0] + "-15").getTime(); return t >= t0 && t <= t1; });
+  const W = 940, H = 420, m = { l: 44, r: 58, t: 22, b: 34 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const x = d => m.l + (new Date(d).getTime() - t0) / (t1 - t0) * iw;
+  const y = v => m.t + (1 - (v + 1) / 2) * ih;
+  const nkMax = Math.ceil(Math.max(...nikkei.map(n => n[1])) / 10000) * 10000, nkMin = Math.floor(Math.min(...nikkei.map(n => n[1])) / 10000) * 10000;
+  const yn = v => m.t + (1 - (v - nkMin) / (nkMax - nkMin)) * ih;
+  const css = getComputedStyle(document.documentElement), c = k => css.getPropertyValue(k).trim();
+  let s = `<g class="grid">${[-1, -0.5, 0, 0.5, 1].map(v => `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" ${v === 0 ? 'style="stroke:' + c("--mute") + ';stroke-opacity:.5"' : ""}/>`).join("")}</g>`;
+  s += `<g class="axis">${[-1, -0.5, 0, 0.5, 1].map(v => `<text x="${m.l - 8}" y="${y(v) + 3}" text-anchor="end">${v > 0 ? "+" : ""}${v}</text>`).join("")}`;
+  const span = RANGE[1] - RANGE[0];
+  for (let yr = RANGE[0]; yr < Math.min(RANGE[1], 2027); yr++) if (span <= 6 || yr % 2 === 1) s += `<text x="${x(yr + "-07-01")}" y="${H - 12}" text-anchor="middle">${yr}</text>`;
+  const stepN = (nkMax - nkMin) > 40000 ? 20000 : 10000;
+  for (let v = nkMin; v <= nkMax; v += stepN) s += `<text x="${W - m.r + 8}" y="${yn(v) + 3}">${v / 1000}k</text>`;
+  s += `</g><g class="ev">`;
+  EVENTS.forEach(([d, t], i) => { const xx = x(d); if (xx < m.l || xx > W - m.r) return; s += `<line x1="${xx}" x2="${xx}" y1="${m.t}" y2="${H - m.b}"/><text x="${xx + 4}" y="${m.t + 8 + (i % 2) * 12}">${t}</text>`; });
+  s += `</g>`;
+  const bw = Math.max(2, Math.min(14, iw / meetings.length * 0.55));
+  s += `<g class="bars">` + meetings.map((d, i) => `<rect data-i="${i}" x="${x(d.date) - bw / 2}" width="${bw}" y="${Math.min(y(0), y(d.tone))}" height="${Math.max(1, Math.abs(y(d.tone) - y(0)))}" fill="${d.tone >= 0 ? c("--hawk") : c("--dove")}" opacity=".45"/>`).join("") + `</g>`;
+  const nkPath = nikkei.map((n, i) => (i ? "L" : "M") + x(n[0] + "-15").toFixed(1) + "," + yn(n[1]).toFixed(1)).join("");
+  const tonePath = meetings.map((d, i) => (i ? "L" : "M") + x(d.date).toFixed(1) + "," + y(d.smooth).toFixed(1)).join("");
+  const anim = animate ? "draw" : "";
+  s += `<path class="${anim}" d="${nkPath}" fill="none" stroke="${c("--nk")}" stroke-width="1.4" stroke-opacity=".9"/>`;
+  s += `<path class="${anim}" d="${tonePath}" fill="none" stroke="${c("--ink")}" stroke-width="1.9" stroke-linejoin="round"/>`;
+  s += `<line id="cross" y1="${m.t}" y2="${H - m.b}" opacity="0"/><circle id="dot" r="3.5" fill="${c("--ink")}" opacity="0"/>`;
+  s += `<rect id="hit" x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" style="cursor:pointer"/>`;
+  const svg = $("#chart"); svg.innerHTML = s;
+  svg.querySelectorAll("path.draw").forEach(p => p.style.setProperty("--len", Math.ceil(p.getTotalLength())));
+  const tip = $("#tip"), box = $("#cb"), rects = svg.querySelectorAll(".bars rect"), cross = svg.querySelector("#cross"), dot = svg.querySelector("#dot");
+  const xs = meetings.map(d => x(d.date));
+  let cur = -1;
+  const pick = clientX => {
+    const r = svg.getBoundingClientRect(), px = (clientX - r.left) / r.width * W;
+    let best = 0; for (let i = 1; i < xs.length; i++) if (Math.abs(xs[i] - px) < Math.abs(xs[best] - px)) best = i;
+    return best;
+  };
+  const hover = ev => {
+    const pt = ev.touches ? ev.touches[0] : ev, i = pick(pt.clientX), d = meetings[i];
+    if (i !== cur) {
+      if (cur >= 0) rects[cur].setAttribute("opacity", ".45");
+      rects[i].setAttribute("opacity", "1"); cur = i;
+      cross.setAttribute("x1", xs[i]); cross.setAttribute("x2", xs[i]); cross.setAttribute("opacity", "1");
+      dot.setAttribute("cx", xs[i]); dot.setAttribute("cy", y(d.smooth)); dot.setAttribute("opacity", "1");
+      tip.innerHTML = `<b>${new Date(d.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</b><br>${d.title}<br>
+        <span style="font-family:var(--mono);font-size:11.5px">tone ${d.tone >= 0 ? "+" : ""}${d.tone.toFixed(2)} · H ${d.hawkish} / D ${d.dovish} / ${d.n} sent.</span>`;
+    }
+    const bx = box.getBoundingClientRect(), r = svg.getBoundingClientRect(), tx = xs[i] / W * r.width;
+    tip.style.left = Math.max(0, Math.min(tx + 14, bx.width - 290)) + "px"; tip.style.top = Math.max(0, pt.clientY - bx.top - 70) + "px"; tip.classList.add("on");
+  };
+  const leave = () => { tip.classList.remove("on"); cross.setAttribute("opacity", "0"); dot.setAttribute("opacity", "0"); if (cur >= 0) rects[cur].setAttribute("opacity", ".45"); cur = -1; };
+  const hit = svg.querySelector("#hit");
+  hit.onpointermove = hover; hit.onpointerleave = leave; hit.ontouchmove = hover;
+  hit.onclick = ev => { const d = meetings[pick(ev.clientX)]; if (d.url) window.open(d.url, "_blank", "noopener"); };
+}
+document.querySelectorAll("#range button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#range button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  RANGE = b.dataset.r.split(",").map(Number); drawChart(true);
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if ($("#time").classList.contains("on")) drawChart(false); });
+dataP.then(() => { kpis(); show(location.hash === "#read" ? "read" : "time"); if (location.hash !== "#read") drawChart(true); });
+</script>
+</body>
+</html>
